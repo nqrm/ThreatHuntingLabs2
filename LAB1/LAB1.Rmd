@@ -1,0 +1,45 @@
+---
+title: "Задание 1: Надите утечку данных из Вашей сети"
+output: md_document
+date: "2023-03-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Важнейшие документы с результатами нашей исследовательской деятельности в области создания вакцин скачиваются в виде больших заархивированных дампов. Один из хостов в нашей сети используется для пересылки этой информации -- он пересылает гораздо больше информации на внешние ресурсы в Интернете, чем остальные компьютеры нашей сети. Определите его IP-адрес.
+
+### Подключение нужных пакетов
+
+```{r,warning=FALSE, message =FALSE, error=FALSE}
+library(arrow)
+library(dplyr)
+library(stringr)
+```
+
+### 1. Импорт датасета
+
+```{r,warning=FALSE, message =FALSE, error=FALSE}
+file <- arrow::read_csv_arrow("gowiththeflow_20190826.csv",schema = schema(timestamp=int64(),src=utf8(),dst=utf8(),port=int32(),bytes=int32()))
+```
+
+### 2. Создание нового поля - признак внешней(внутренней) сети
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+file <- file %>% 
+  select(src,dst,bytes) %>%
+  mutate(outside_traffic = str_detect(src,"^((12|13|14)\\.)") & !str_detect(dst,"^((12|13|14)\\.)"))
+```
+
+### 3. Выборка топ 10 ip адресов, которые используются чаще остальных:
+
+```{r,warning=FALSE, message =FALSE, error=FALSE}
+file %>%
+  select(src,dst,bytes,outside_traffic) %>%
+  filter(outside_traffic == TRUE) %>%
+  group_by(src) %>%
+  summarise(loads = sum(bytes)) %>%
+  arrange(desc(loads)) %>%
+  head(10)
+```

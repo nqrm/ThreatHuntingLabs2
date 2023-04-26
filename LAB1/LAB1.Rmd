@@ -71,3 +71,21 @@ dataset %>%
   #collect()
   #ggplot(., aes(x=hour,y=packets),) + geom_histogram(stat="identity", color="black",fill="green")
 ```
+
+
+# Задание 3: Найдите утечку данных 3
+### Еще один нарушитель собирает содержимое электронной почты и отправляет в Интернет используя порт, который обычно используется для другого типа трафика. Атакующий пересылает большое количество информации используя этот порт, которое нехарактерно для других хостов, использующих этот номер порта. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителей из предыдущих задач.
+
+```{r}
+dataset %>%
+  select(src, dst, bytes,port) %>%
+  mutate(outside_traffic = (str_detect(src,"^((12|13|14)\\.)") & !str_detect(dst,"^((12|13|14)\\.)"))) %>%
+  filter(outside_traffic == TRUE) %>%
+  group_by(port) %>%
+  summarise(total_bytes=sum(bytes)) %>%
+  #arrange(desc(total_bytes))  %>%
+  #head(10) %>%
+  collect() %>%
+  ggplot(., aes(x=port,y=total_bytes),) + geom_histogram(stat="identity", color="black",fill="green",bins = 110)
+```
+

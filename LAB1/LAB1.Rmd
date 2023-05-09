@@ -48,20 +48,29 @@ dataset %>%
 
 ## Другой атакующий установил автоматическую задачу в системном планировщике cron для экспорта содержимого внутренней wiki системы. Эта система генерирует большое количество траффика в нерабочие часы, больше чем остальные хосты. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителя из предыдущей задачи.
 
-### Топ 10 ip-адресов, генерирующих большое количество трафика в нерабочее время
 
-### Построя графики распределения количества пакетов и данных за каждый час, можно предположить, что часы с меньшей активностью и есть нерабочие - с 0 по 15.
+### Построив графики распределения количества пакетов и данных за каждый час, видно, что:
+      1. С 16 часов резко возрастает сетевая активность и остается примерно на одном уровне до 24 часа;
+      2. С 0 часа до 15 сетевая активность, так же равномерна, но значительно меньше чем в часы 16-24;
+
+### Предполагая, что в рабочее время сетевая активность больше чем в нерабочее, можно сделать вывод, что нерабочие часы - с 0 по 15.
+
+
+### Количество пакетов в каждый час
+
+
+### Количество данных в каждый час
+
 
 ### Ответ на задание - 12.55.77.96
-
 ```{r, warning=FALSE, message=FALSE, error=FALSE}
 dataset %>%
   select(timestamp, src, dst, bytes) %>%
   mutate(outside_traffic = (str_detect(src,"^((12|13|14)\\.)") & !str_detect(dst,"^((12|13|14)\\.)")), hour = hour(as_datetime(timestamp/1000))) %>%
   filter(outside_traffic == TRUE, hour >= 0 & hour <= 15) %>%
   group_by(src) %>%
-  summarise(total_bytes = sum(bytes)) %>%
-  arrange(desc(total_bytes))  %>%
+  summarise(total_bytes = sum(bytes),) %>%
+  arrange(desc(total_bytes)) %>%
   head(10) %>%
   collect()
   
@@ -76,16 +85,72 @@ dataset %>%
 # Задание 3: Найдите утечку данных 3
 ### Еще один нарушитель собирает содержимое электронной почты и отправляет в Интернет используя порт, который обычно используется для другого типа трафика. Атакующий пересылает большое количество информации используя этот порт, которое нехарактерно для других хостов, использующих этот номер порта. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителей из предыдущих задач.
 
-```{r}
+
+### 1. Сколько всего данных отправлено на каждый порт
+
+
+
+### 2. Исходя из графика, нужно найти только те порты, на которые отправлено меньше всего данных
+```{r,warning=FALSE, message=FALSE, error=FALSE}
 dataset %>%
   select(src, dst, bytes,port) %>%
   mutate(outside_traffic = (str_detect(src,"^((12|13|14)\\.)") & !str_detect(dst,"^((12|13|14)\\.)"))) %>%
   filter(outside_traffic == TRUE) %>%
   group_by(port) %>%
-  summarise(total_bytes=sum(bytes)) %>%
-  #arrange(desc(total_bytes))  %>%
-  #head(10) %>%
-  collect() %>%
-  ggplot(., aes(x=port,y=total_bytes),) + geom_histogram(stat="identity", color="black",fill="green",bins = 110)
+  summarise(total_data=sum(bytes)) %>%
+  filter(total_data < 5*10^9) %>%
+  select(port) %>%
+  collect() -> ports
+
+ports <- unlist(ports)
+ports <- as.vector(ports,'numeric')
 ```
 
+
+### 3. Выбрать данные с нужными номерами портов
+```{r,warning=FALSE, message=FALSE, error=FALSE}
+dataset %>%
+  select(src, dst, bytes,port) %>%
+  mutate(outside_traffic = (str_detect(src,"^((12|13|14)\\.)") & !str_detect(dst,"^((12|13|14)\\.)"))) %>%
+  filter(outside_traffic == TRUE) %>%
+  filter(port %in% ports) %>%
+  group_by(src,port) %>%
+  summarise(total_bytes=sum(bytes)) %>%
+  arrange(desc(port)) %>%
+  collect() -> df
+
+```
+
+
+### 4. Порты с маскимальным кол-вом данных
+```{r,warning=FALSE, message=FALSE, error=FALSE}
+df %>%
+  group_by(src, port) %>%
+  summarise(total_data=sum(total_bytes)) %>%
+  arrange(desc(total_data)) %>%
+  head(10) %>%
+  collect()
+```
+
+
+### 5. Количество хостов к портам
+```{r,warning=FALSE, message=FALSE, error=FALSE}
+df %>%
+  group_by(port) %>%
+  summarise(hosts=n()) %>%
+  arrange(hosts) %>%
+  head(10) %>%
+  collect()
+```
+
+
+### 6. Из предыдущих пунктов следует вывод, что ip-адрес злоумышленника 12.55.77.96, а порт 31, т.к. из таблицы в 5 пункте видно, что 31 порт использовал только 1 хост и в тоже время из таблицы в 4 пункте видно, что больше всего данных было передано именно по этому порту 
+```{r,warning=FALSE, message=FALSE, error=FALSE}
+df %>%
+  filter(port == 31) %>%
+  group_by(src) %>%
+  summarise(total_data=sum(total_bytes)) %>%
+  collect()
+```
+
+### Ответ на задание - 12.55.77.96
